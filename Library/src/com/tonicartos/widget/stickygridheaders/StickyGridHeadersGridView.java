@@ -17,6 +17,7 @@
 package com.tonicartos.widget.stickygridheaders;
 
 import com.tonicartos.widget.stickygridheaders.StickyGridHeadersBaseAdapterWrapper.HeaderFillerView;
+import com.woozzu.android.widget.IndexScroller;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -33,6 +34,7 @@ import android.os.Handler;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.util.AttributeSet;
+import android.view.GestureDetector;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.SoundEffectConstants;
@@ -299,6 +301,26 @@ public class StickyGridHeadersGridView extends GridView implements OnScrollListe
 
     @Override
     public boolean onTouchEvent(MotionEvent ev) {
+		if (mIsFastScrollEnabled) {
+			// Intercept ListView's touch event
+			if (mScroller != null) {
+				mScroller.onTouchEvent(ev);
+			}
+			if (mGestureDetector == null) {
+				mGestureDetector = new GestureDetector(getContext(),
+					new GestureDetector.SimpleOnGestureListener() {
+						@Override
+						public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+							// If fling happens, index bar shows
+							mScroller.show();
+							return super.onFling(e1, e2, velocityX, velocityY);
+						}
+					});
+			}
+			mGestureDetector.onTouchEvent(ev);
+		}
+    		
+    		
         final int action = ev.getAction();
         boolean wasHeaderChildBeingPressed = mHeaderChildBeingPressed;
         if (mHeaderChildBeingPressed) {
@@ -476,6 +498,10 @@ public class StickyGridHeadersGridView extends GridView implements OnScrollListe
 
     @Override
     public void setAdapter(ListAdapter adapter) {
+    	if (mIsFastScrollEnabled && mScroller != null)
+			mScroller.setAdapter(adapter);
+    	
+    	
         if (mAdapter != null && mDataSetObserver != null) {
             mAdapter.unregisterDataSetObserver(mDataSetObserver);
         }
@@ -1225,4 +1251,35 @@ public class StickyGridHeadersGridView extends GridView implements OnScrollListe
             out.writeByte((byte)(areHeadersSticky ? 1 : 0));
         }
     }
+
+	private boolean mIsFastScrollEnabled = false;
+	private IndexScroller mScroller = null;
+	private GestureDetector mGestureDetector = null;
+
+    public void setIndexableFastScrollEnabled(boolean enabled){
+        mIsFastScrollEnabled = enabled;
+        if (mScroller==null && mIsFastScrollEnabled) {
+        	mScroller = new IndexScroller(getContext(), this);
+        } else {
+            if (mScroller != null) {
+                mScroller.hide();
+            }
+        }
+    }
+
+	@Override
+	public void draw(Canvas canvas) {
+		super.draw(canvas);
+		// Overlay index bar
+		if (mScroller != null && mIsFastScrollEnabled && canvas!=null)
+			mScroller.draw(canvas);
+	}
+
+
+	@Override
+	protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+		super.onSizeChanged(w, h, oldw, oldh);
+		if (mScroller != null && mIsFastScrollEnabled)
+			mScroller.onSizeChanged(w, h, oldw, oldh);
+	}
 }
